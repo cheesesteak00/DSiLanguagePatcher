@@ -50,11 +50,13 @@ void Log(LOGLEVEL level, const char *format, ...)
 {
   char buffer[256] ;
   consoleSelect(&topScreen);
-	va_list ap;
+	va_list ap, ap2;
 	va_start(ap, format);
+	va_copy(ap2, ap);
 	vprintf(format, ap) ;
-	vsprintf(buffer, format, ap) ;
 	va_end(ap);
+	vsnprintf(buffer, sizeof(buffer), format, ap2) ;
+	va_end(ap2);
   consoleSelect(&bottomScreen);
 
 	if (level == LOGLEVEL_ERROR)
@@ -137,6 +139,9 @@ int main(void) {
 	consoleInit(&topScreen, 3,BgType_Text4bpp, BgSize_T_256x256, 31, 0, true, true);
 	consoleInit(&bottomScreen, 3,BgType_Text4bpp, BgSize_T_256x256, 31, 0, false, true);
 
+	// picolibc buffers stdout by default; make it unbuffered so every printf
+	// call immediately updates the tile buffer, matching the old iprintf behaviour.
+	setvbuf(stdout, NULL, _IONBF, 0);
 
 	consoleSelect(&topScreen);  
   InfoBorder() ;
