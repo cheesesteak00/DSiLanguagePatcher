@@ -7,16 +7,6 @@
 
 #include <stddef.h>
 
-// BlocksDS libnds removed these constants; define them for compatibility.
-// my_sdmmcValueHandler uses them but is never registered, so the values
-// just need to be distinct from the active FifoSdmmcCommands entries.
-#ifndef SDMMC_HAVE_SD
-#define SDMMC_HAVE_SD        100
-#endif
-#ifndef SDMMC_SD_IS_INSERTED
-#define SDMMC_SD_IS_INSERTED 101
-#endif
-
 static struct mmcdevice deviceSD;
 static struct mmcdevice deviceNAND;
 
@@ -599,54 +589,6 @@ int my_sdmmc_nand_startup() {
 //---------------------------------------------------------------------------------
     my_sdmmc_controller_init(false);
     return my_sdmmc_nand_init();
-}
-
-//---------------------------------------------------------------------------------
-int my_sdmmc_sd_startup() {
-//---------------------------------------------------------------------------------
-    my_sdmmc_controller_init(false);
-    return my_sdmmc_sdcard_init();
-}
-
-//---------------------------------------------------------------------------------
-void my_sdmmcValueHandler(u32 value, void* user_data) {
-//---------------------------------------------------------------------------------
-    int result = 0;
-    int sdflag = 0;
-    int oldIME = enterCriticalSection();
-
-    switch(value) {
-
-    case SDMMC_HAVE_SD:
-        result = sdmmc_read16(REG_SDSTATUS0);
-        break;
-
-    case SDMMC_SD_START:
-        sdflag = 1;
-        /* Falls through. */
-    case SDMMC_NAND_START:
-        if (sdmmc_read16(REG_SDSTATUS0) == 0) {
-            result = 1;
-        } else {
-            result = (sdflag == 1 ) ? my_sdmmc_sd_startup() : my_sdmmc_nand_startup();
-        }
-        break;
-
-    case SDMMC_SD_IS_INSERTED:
-        result = my_sdmmc_cardinserted();
-        break;
-
-    case SDMMC_SD_STOP:
-        break;
-
-    case SDMMC_NAND_SIZE:
-        result = deviceNAND.total_size;
-        break;
-    }
-
-    leaveCriticalSection(oldIME);
-
-    fifoSendValue32(FIFO_SDMMC, result);
 }
 
 //---------------------------------------------------------------------------------

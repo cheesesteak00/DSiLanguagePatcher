@@ -131,7 +131,7 @@ static bool read_sectors(sec_t start, sec_t len, void *buffer)
 // len is guaranteed <= CRYPT_BUF_LEN
 static bool write_sectors(sec_t start, sec_t len, const void *buffer) 
 {
-  static u8 writeCopy[SECTOR_SIZE*16] ;
+  static u8 writeCopy[SECTOR_SIZE*CRYPT_BUF_LEN] ;
 	memcpy(writeCopy, buffer, len * SECTOR_SIZE) ;
     
   dsi_nand_crypt(crypt_buf, writeCopy, start * SECTOR_SIZE / AES_BLOCK_SIZE, len * SECTOR_SIZE / AES_BLOCK_SIZE);
