@@ -179,8 +179,15 @@ int main(void) {
 		Log(LOGLEVEL_ERROR, "[E] Invalid ConsoleID found!\n");
 	}
 
-	// BlocksDS: nandInit() replaces fatMountSimple("nand", &io_dsi_nand)
-	// It mounts the encrypted DSi NAND at "nand:/" using the built-in driver.
+	// BlocksDS: fatInitDefault() must be called first to initialise the FAT
+	// layer (DSi SD card + flashcard DLDI).  nandInit() then mounts the
+	// encrypted DSi NAND on top of that.  Calling nandInit() without
+	// fatInit() first causes it to hang waiting for ARM7 setup that never
+	// completes.
+	if (!fatInitDefault())
+	{
+		Log(LOGLEVEL_ERROR, "[E] Could not init FAT\n");
+	}
 	if (!nandInit(false))
 	{
 		Log(LOGLEVEL_ERROR, "[E] Could not mount NAND\n");
@@ -382,11 +389,11 @@ int main(void) {
     Log(LOGLEVEL_ERROR, "[E] Write file failed\n    You can turn off now\n") ;
   }
 
-  Log(LOGLEVEL_PROGRESS, "[-] Unmounting\n") ;
-  // BlocksDS: fatUnmount() removed — nandInit() manages the lifetime of the
-  // NAND mount; filesystem writes are committed via nandio_shutdown() below.
-  Log(LOGLEVEL_PROGRESS, "[-] Merging stages\n");
-  nandio_shutdown() ;			
+  // BlocksDS: no explicit unmount step needed.  The fclose() inside
+  // system_writeFile() already flushed the file and caused FatFs to update
+  // all FAT copies.  The old nandio_shutdown() (custom-driver FAT-stage merge)
+  // must NOT be called here because nandio_startup() was never invoked —
+  // nandInit() uses BlocksDS's built-in NAND driver, not our custom io_dsi_nand.
   
   WaitForSuccessRestart() ;
   while(true) 
