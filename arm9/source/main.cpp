@@ -184,14 +184,17 @@ int main(void) {
 	// encrypted DSi NAND on top of that.  Calling nandInit() without
 	// fatInit() first causes it to hang waiting for ARM7 setup that never
 	// completes.
+	Log(LOGLEVEL_INFO, "[i] Calling fatInitDefault\n") ;
 	if (!fatInitDefault())
 	{
 		Log(LOGLEVEL_ERROR, "[E] Could not init FAT\n");
 	}
+	Log(LOGLEVEL_INFO, "[i] Calling nandInit\n") ;
 	if (!nandInit(false))
 	{
 		Log(LOGLEVEL_ERROR, "[E] Could not mount NAND\n");
 	}
+	Log(LOGLEVEL_INFO, "[i] NAND mounted\n") ;
 	
 	long nandSize = 0;
 	struct statvfs st;
