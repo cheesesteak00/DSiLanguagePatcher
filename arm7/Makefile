@@ -1,11 +1,23 @@
 #---------------------------------------------------------------------------------
 .SUFFIXES:
 #---------------------------------------------------------------------------------
-ifeq ($(strip $(DEVKITARM)),)
-$(error "Please set DEVKITARM in your environment. export DEVKITARM=<path to>devkitARM")
+BLOCKSDS            ?= /opt/wonderful/thirdparty/blocksds/core
+WONDERFUL_TOOLCHAIN ?= /opt/wonderful
+ARM_NONE_EABI_PATH  ?= $(WONDERFUL_TOOLCHAIN)/toolchain/gcc-arm-none-eabi/bin/
+
+ifeq ($(strip $(BLOCKSDS)),)
+$(error "Please set BLOCKSDS in your environment. export BLOCKSDS=<path to>blocksds/core")
 endif
 
-include $(DEVKITARM)/ds_rules
+export PATH     :=  $(ARM_NONE_EABI_PATH):$(PATH)
+PREFIX          :=  arm-none-eabi-
+CC              :=  $(PREFIX)gcc
+CXX             :=  $(PREFIX)g++
+AR              :=  $(PREFIX)ar
+OBJCOPY         :=  $(PREFIX)objcopy
+STRIP           :=  $(PREFIX)strip
+NM              :=  $(PREFIX)nm
+RANLIB          :=  $(PREFIX)ranlib
 
 #---------------------------------------------------------------------------------
 # BUILD is the directory where object files & intermediate files will be placed
@@ -34,15 +46,21 @@ CXXFLAGS	:=	$(CFLAGS) -fno-rtti -fno-exceptions -fno-rtti
 
 
 ASFLAGS	:=	-g $(ARCH)
-LDFLAGS	=	-specs=ds_arm7.specs -g $(ARCH) -Wl,--nmagic -Wl,-Map,$(notdir $*).map
+LDFLAGS	=	-g $(ARCH) -nostdlib \
+		-T$(BLOCKSDS)/sys/crts/ds_arm7.ld \
+		-Wl,--gc-sections \
+		-Wl,--no-warn-rwx-segments \
+		-Wl,-Map,$(notdir $*).map
 
-LIBS	:=	-ldswifi7 -lmm7 -lnds7
+LIBS	:=	-Wl,--start-group -ldswifi7 -lmm7 -lnds7 -lc -Wl,--end-group -lgcc
 
 #---------------------------------------------------------------------------------
 # list of directories containing libraries, this must be the top level containing
 # include and lib
 #---------------------------------------------------------------------------------
-LIBDIRS	:=	$(LIBNDS)
+LIBDIRS	:=	$(BLOCKSDS)/libs/dswifi \
+			$(BLOCKSDS)/libs/maxmod \
+			$(BLOCKSDS)/libs/libnds
  
   
 #---------------------------------------------------------------------------------
@@ -108,16 +126,32 @@ DEPENDS	:=	$(OFILES:.o=.d)
 #---------------------------------------------------------------------------------
 $(ARM7ELF)	:	$(OFILES)
 	@echo linking $(notdir $@)
-	@$(LD)  $(LDFLAGS) $(OFILES) $(LIBPATHS) $(LIBS) -o $@
+	@$(LD) -o $@ $(BLOCKSDS)/sys/crts/ds_arm7_crt0.o $(OFILES) $(LIBPATHS) $(LIBS) $(LDFLAGS)
 
 
 #---------------------------------------------------------------------------------
-# you need a rule like this for each extension you use as binary data 
+# compile rules (previously provided by ds_rules)
+#---------------------------------------------------------------------------------
+%.o	:	%.c
+	@echo $(notdir $<)
+	@$(CC) -MMD -MP -MF $(DEPSDIR)/$*.d $(CFLAGS) $(INCLUDE) -c $< -o $@
+
+%.o	:	%.cpp
+	@echo $(notdir $<)
+	@$(CXX) -MMD -MP -MF $(DEPSDIR)/$*.d $(CXXFLAGS) $(INCLUDE) -c $< -o $@
+
+%.o	:	%.s
+	@echo $(notdir $<)
+	@$(CC) -MMD -MP -MF $(DEPSDIR)/$*.d -x assembler-with-cpp $(ASFLAGS) $(INCLUDE) -c $< -o $@
+
+#---------------------------------------------------------------------------------
+# you need a rule like this for each extension you use as binary data
 #---------------------------------------------------------------------------------
 %.bin.o	:	%.bin
 #---------------------------------------------------------------------------------
 	@echo $(notdir $<)
-	@$(bin2o)
+	@$(BLOCKSDS)/tools/bin2c/bin2c $< .
+	@$(CC) $(CFLAGS) -MMD -MP -c -o $@ $(notdir $*).bin.c
 
 -include $(DEPENDS)
  

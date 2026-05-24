@@ -25,7 +25,7 @@ char *system_getLauncherPath(uint8_t *region)
 	{
 	// nand:/title/00030017/484e41??/content
 		static char folderToCheck[260] = {0};
-		siprintf(folderToCheck, "nand:title/00030017/484e41%02x/content", knownRegions[i].folderKey) ;
+		sprintf(folderToCheck, "nand:title/00030017/484e41%02x/content", knownRegions[i].folderKey) ;
 		appLauncherDir = opendir(folderToCheck) ;
 		if (appLauncherDir)
 		{

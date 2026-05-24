@@ -7,6 +7,16 @@
 
 #include <stddef.h>
 
+// BlocksDS libnds removed these constants; define them for compatibility.
+// my_sdmmcValueHandler uses them but is never registered, so the values
+// just need to be distinct from the active FifoSdmmcCommands entries.
+#ifndef SDMMC_HAVE_SD
+#define SDMMC_HAVE_SD        100
+#endif
+#ifndef SDMMC_SD_IS_INSERTED
+#define SDMMC_SD_IS_INSERTED 101
+#endif
+
 static struct mmcdevice deviceSD;
 static struct mmcdevice deviceNAND;
 

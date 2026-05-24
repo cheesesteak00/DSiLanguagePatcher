@@ -2,10 +2,12 @@
 #include <stdio.h>
 #include "gm9i/nandio.h"
 #include <fat.h>
-#include<stdarg.h>
-#include<stdio.h>
+#include <stdarg.h>
+#include <stdio.h>
 #include <dirent.h>
 #include <stdint.h>
+#include <sys/stat.h>
+#include <sys/statvfs.h>
 #include "gm9i/crypto.h"
 #include "gm9i/f_xy.h"
 #include "polarssl/aes.h"
@@ -172,7 +174,9 @@ int main(void) {
 		Log(LOGLEVEL_ERROR, "[E] Invalid ConsoleID found!\n");
 	}
 
-	if (!fatMountSimple("nand", &io_dsi_nand))
+	// BlocksDS: nandInit() replaces fatMountSimple("nand", &io_dsi_nand)
+	// It mounts the encrypted DSi NAND at "nand:/" using the built-in driver.
+	if (!nandInit(false))
 	{
 		Log(LOGLEVEL_ERROR, "[E] Could not mount NAND\n");
 	}
@@ -374,7 +378,8 @@ int main(void) {
   }
 
   Log(LOGLEVEL_PROGRESS, "[-] Unmounting\n") ;
-  fatUnmount("nand:") ;
+  // BlocksDS: fatUnmount() removed — nandInit() manages the lifetime of the
+  // NAND mount; filesystem writes are committed via nandio_shutdown() below.
   Log(LOGLEVEL_PROGRESS, "[-] Merging stages\n");
   nandio_shutdown() ;			
   

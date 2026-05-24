@@ -1,13 +1,12 @@
 #---------------------------------------------------------------------------------
 .SUFFIXES:
 #---------------------------------------------------------------------------------
-ifeq ($(strip $(DEVKITARM)),)
-$(error "Please set DEVKITARM in your environment. export DEVKITARM=<path to>devkitARM")
-endif
 
 export TARGET	:=	$(shell basename $(CURDIR))
 export TOPDIR	:=	$(CURDIR)
-ICON     := 
+ICON     :=
+
+BLOCKSDS        ?= /opt/wonderful/thirdparty/blocksds/core
 
 # specify a directory which contains the nitro filesystem
 # this is relative to the Makefile
@@ -17,8 +16,6 @@ NITRO_FILES	:=
 GAME_TITLE      := Language Patcher
 GAME_SUBTITLE1  := !CAUTION!
 GAME_SUBTITLE2  := !Risk of Brick!
-
-include $(DEVKITARM)/ds_rules
 
 ifeq ($(strip $(ICON)),)
   icons := $(wildcard *.bmp)
@@ -55,7 +52,7 @@ checkarm9:
 
 #---------------------------------------------------------------------------------
 $(TARGET).nds	: $(NITRO_FILES) arm7/$(TARGET).elf arm9/$(TARGET).elf
-	ndstool	-c $(TARGET).nds -7 arm7/$(TARGET).elf -9 arm9/$(TARGET).elf \
+	$(BLOCKSDS)/tools/ndstool/ndstool -c $(TARGET).nds -7 arm7/$(TARGET).elf -9 arm9/$(TARGET).elf \
 	-b $(GAME_ICON) "$(GAME_TITLE);$(GAME_SUBTITLE1);$(GAME_SUBTITLE2)" \
 	$(_ADDFILES)
 
