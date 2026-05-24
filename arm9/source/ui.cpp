@@ -11,18 +11,18 @@ const uint16_t konamiSequence[] =
 
 static void SetCursorPos(uint8_t x, uint8_t y)
 {
-  iprintf("\x1b[%d;%dH", y, x); 
+  printf("\x1b[%d;%dH", y, x); 
 }
 
 static void SetTextColor(uint8_t color)
 {
-  iprintf("\x1b[%dm", color) ;
+  printf("\x1b[%dm", color) ;
 }
 
 void InfoBorder()
 {
-  iprintf("DSi Language Patcher     v2.0rc4") ;
-  iprintf("--------------------------------") ; 
+  printf("DSi Language Patcher     v2.0rc4") ;
+  printf("--------------------------------") ; 
 }
 
 uint32_t OptionSelect(const char *name, std::vector<const char *>values, uint32_t defaultIndex)
@@ -37,12 +37,12 @@ uint32_t OptionSelect(const char *name, std::vector<const char *>values, uint32_
     uint16_t keys_down = keysDown() ;
     SetCursorPos(5,5) ;
     SetTextColor(39) ;
-    iprintf("Select %s:", name) ;
+    printf("Select %s:", name) ;
     for (uint32_t i=0;i<values.size();i++)
     {
       SetTextColor(i == selected?32:39) ;
       SetCursorPos(5, 7+i) ;
-      iprintf(" - %s", values[i]) ;
+      printf(" - %s", values[i]) ;
     }
     if (keys_down & KEY_UP)
     {
@@ -74,9 +74,9 @@ void CreateProgress(const char *msg)
   consoleClear() ;
   InfoBorder() ;
   SetCursorPos(6,5) ;
-  iprintf("%s", msg) ;
+  printf("%s", msg) ;
   SetCursorPos(0,10) ;
-  iprintf(
+  printf(
     "      --------------------      "
     "     |                    |     "
     "      --------------------      "
@@ -95,7 +95,7 @@ void UpdateProgress(uint8_t progress)
   }
   SetCursorPos(0,11) ;
   swiWaitForVBlank(); 
-  iprintf("%s", buffer) ;
+  printf("%s", buffer) ;
 }
 
 void ClearProgress() 
@@ -120,10 +120,10 @@ void WaitForPowercord()
     swiWaitForVBlank();
     scanKeys() ;
     SetCursorPos(6,5) ;
-    iprintf("Please plug in power") ;
+    printf("Please plug in power") ;
     SetCursorPos(0,10) ;
     SetTextColor(33) ;
-    iprintf(
+    printf(
       "   ###         ----             "
       "   |          |    \\            "
       "   O      ====|     \\           "
@@ -147,10 +147,10 @@ bool WaitForKonami(const char *msg)
     scanKeys() ;
     uint16_t keys_down = keysDown() ;
     SetCursorPos(5,5) ;
-    iprintf("%s", msg) ;
+    printf("%s", msg) ;
     
     SetCursorPos(5,11) ;
-    iprintf("Enter sequence:") ;
+    printf("Enter sequence:") ;
     
     for (uint32_t i=0;i<sizeof(konamiSequence) / sizeof(konamiSequence[0]);i++)
     {
@@ -159,22 +159,22 @@ bool WaitForKonami(const char *msg)
       switch (konamiSequence[i])
       {
         case KEY_UP:
-          iprintf("/\\") ;
+          printf("/\\") ;
           break;
         case KEY_DOWN:
-          iprintf("\\/") ;
+          printf("\\/") ;
           break;
         case KEY_LEFT:
-          iprintf("<-") ;
+          printf("<-") ;
           break;
         case KEY_RIGHT:
-          iprintf("->") ;
+          printf("->") ;
           break;
         case KEY_A:
-          iprintf("[A]") ;
+          printf("[A]") ;
           break;
         case KEY_B:
-          iprintf("[B]") ;
+          printf("[B]") ;
           break;
       }
     }
@@ -201,7 +201,7 @@ void WaitForErrorRestart(char *msg)
   InfoBorder() ;
   SetCursorPos(0, 2) ;
   SetTextColor(31) ;
-  iprintf(
+  printf(
   
     "                                "
     "    EEEE RRR  RRR   OO  RRR     "
@@ -212,9 +212,9 @@ void WaitForErrorRestart(char *msg)
     "                                "
     "                                "
   ) ;
-  iprintf("%s", msg) ;
+  printf("%s", msg) ;
   SetTextColor(39) ;
-  iprintf(
+  printf(
     "                                "
     "                                "
     "   You can turn off your DSi    "
@@ -242,7 +242,7 @@ void WaitForSuccessRestart()
   InfoBorder() ;
   SetCursorPos(0, 2) ;
   SetTextColor(32) ;
-  iprintf(
+  printf(
     "                                "
     "       OOOOO      KK   KK       "
     "      OOOOOOO     KK  KK        "
@@ -258,7 +258,7 @@ void WaitForSuccessRestart()
     "                                "
   ) ;
   SetTextColor(39) ;
-  iprintf(
+  printf(
     "   You can turn off your DSi    "
     "                                "
     "              or                "

@@ -592,54 +592,6 @@ int my_sdmmc_nand_startup() {
 }
 
 //---------------------------------------------------------------------------------
-int my_sdmmc_sd_startup() {
-//---------------------------------------------------------------------------------
-    my_sdmmc_controller_init(false);
-    return my_sdmmc_sdcard_init();
-}
-
-//---------------------------------------------------------------------------------
-void my_sdmmcValueHandler(u32 value, void* user_data) {
-//---------------------------------------------------------------------------------
-    int result = 0;
-    int sdflag = 0;
-    int oldIME = enterCriticalSection();
-
-    switch(value) {
-
-    case SDMMC_HAVE_SD:
-        result = sdmmc_read16(REG_SDSTATUS0);
-        break;
-
-    case SDMMC_SD_START:
-        sdflag = 1;
-        /* Falls through. */
-    case SDMMC_NAND_START:
-        if (sdmmc_read16(REG_SDSTATUS0) == 0) {
-            result = 1;
-        } else {
-            result = (sdflag == 1 ) ? my_sdmmc_sd_startup() : my_sdmmc_nand_startup();
-        }
-        break;
-
-    case SDMMC_SD_IS_INSERTED:
-        result = my_sdmmc_cardinserted();
-        break;
-
-    case SDMMC_SD_STOP:
-        break;
-
-    case SDMMC_NAND_SIZE:
-        result = deviceNAND.total_size;
-        break;
-    }
-
-    leaveCriticalSection(oldIME);
-
-    fifoSendValue32(FIFO_SDMMC, result);
-}
-
-//---------------------------------------------------------------------------------
 int my_sdmmc_sdcard_readsectors(u32 sector_no, u32 numsectors, void *out) {
 //---------------------------------------------------------------------------------
     return my_sdmmc_readsectors(&deviceSD, sector_no, numsectors, out);

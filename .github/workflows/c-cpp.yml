@@ -15,8 +15,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: devkitpro/devkitarm
-    name: Build with Docker using devkitARM
+    container: skylyrac/blocksds:slim-latest
+    name: Build with Docker using BlocksDS
     outputs:
       commit_tag: ${{ steps.build.outputs.commit_tag }}
       commit_hash: ${{ steps.build.outputs.commit_hash }}
@@ -26,26 +26,24 @@ jobs:
       commit_message: ${{ steps.build.outputs.commit_message }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v1
-      - name: Update system
-        run: |
-          sudo apt-get update
+        uses: actions/checkout@v4
       - name: Build 
         id: build
         run: |
           make
           cp *.nds ~/
       - name: Publish build to GH Actions
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           path: ~/*.nds
           name: build
       - name: Upload the artifacts
+        if: github.event_name == 'release'
         uses: skx/github-action-publish-binaries@master
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          args: '*.nds'          
+          args: '*.nds'
           
 
 

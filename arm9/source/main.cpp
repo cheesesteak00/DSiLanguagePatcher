@@ -2,10 +2,12 @@
 #include <stdio.h>
 #include "gm9i/nandio.h"
 #include <fat.h>
-#include<stdarg.h>
-#include<stdio.h>
+#include <stdarg.h>
+#include <stdio.h>
 #include <dirent.h>
 #include <stdint.h>
+#include <sys/stat.h>
+#include <sys/statvfs.h>
 #include "gm9i/crypto.h"
 #include "gm9i/f_xy.h"
 #include "polarssl/aes.h"
@@ -48,11 +50,13 @@ void Log(LOGLEVEL level, const char *format, ...)
 {
   char buffer[256] ;
   consoleSelect(&topScreen);
-	va_list ap;
+	va_list ap, ap2;
 	va_start(ap, format);
+	va_copy(ap2, ap);
 	vprintf(format, ap) ;
-	vsprintf(buffer, format, ap) ;
 	va_end(ap);
+	vsnprintf(buffer, sizeof(buffer), format, ap2) ;
+	va_end(ap2);
   consoleSelect(&bottomScreen);
 
 	if (level == LOGLEVEL_ERROR)
@@ -92,6 +96,37 @@ void decrypt_modcrypt_area(dsi_context* ctx, u8 *buffer, unsigned int size, prog
 	}
 }
 
+// AES-CTR is its own inverse, so this same function handles both directions:
+//   - called before patching  → decrypts the sections into plaintext
+//   - called after patching   → re-encrypts the patched plaintext back
+// The CTR values are read directly from the binary (0x300 for section 1,
+// 0x314 for section 2) and are never modified, so both calls use the same inputs.
+static void apply_modcrypt(uint8_t *target,
+                           const u8 *key,
+                           const uint32_t *offsets,
+                           const uint32_t *lengths,
+                           const char *msg1,
+                           const char *msg2)
+{
+	dsi_context ctx;
+
+	CreateProgress(msg1);
+	dsi_set_key(&ctx, key);
+	dsi_set_ctr(&ctx, &target[0x300]);
+	if (lengths[0]) {
+		decrypt_modcrypt_area(&ctx, target+offsets[0], lengths[0], &UpdateProgress) ;
+	}	
+	ClearProgress();
+
+	CreateProgress(msg2);
+	dsi_set_key(&ctx, key);
+	dsi_set_ctr(&ctx, &target[0x314]);
+	if (lengths[1]) {
+		decrypt_modcrypt_area(&ctx, target+offsets[1], lengths[1], &UpdateProgress) ;
+	}
+	ClearProgress() ;
+}
+
 //---------------------------------------------------------------------------------
 int main(void) {
 //---------------------------------------------------------------------------------	
@@ -104,6 +139,9 @@ int main(void) {
 	consoleInit(&topScreen, 3,BgType_Text4bpp, BgSize_T_256x256, 31, 0, true, true);
 	consoleInit(&bottomScreen, 3,BgType_Text4bpp, BgSize_T_256x256, 31, 0, false, true);
 
+	// picolibc buffers stdout by default; make it unbuffered so every printf
+	// call immediately updates the tile buffer, matching the old iprintf behaviour.
+	setvbuf(stdout, NULL, _IONBF, 0);
 
 	consoleSelect(&topScreen);  
   InfoBorder() ;
@@ -141,10 +179,22 @@ int main(void) {
 		Log(LOGLEVEL_ERROR, "[E] Invalid ConsoleID found!\n");
 	}
 
-	if (!fatMountSimple("nand", &io_dsi_nand))
+	// BlocksDS: fatInitDefault() must be called first to initialise the FAT
+	// layer (DSi SD card + flashcard DLDI).  nandInit() then mounts the
+	// encrypted DSi NAND on top of that.  Calling nandInit() without
+	// fatInit() first causes it to hang waiting for ARM7 setup that never
+	// completes.
+	Log(LOGLEVEL_INFO, "[i] Calling fatInitDefault\n") ;
+	if (!fatInitDefault())
+	{
+		Log(LOGLEVEL_ERROR, "[E] Could not init FAT\n");
+	}
+	Log(LOGLEVEL_INFO, "[i] Calling nandInit\n") ;
+	if (!nandInit(false))
 	{
 		Log(LOGLEVEL_ERROR, "[E] Could not mount NAND\n");
 	}
+	Log(LOGLEVEL_INFO, "[i] NAND mounted\n") ;
 	
 	long nandSize = 0;
 	struct statvfs st;
@@ -215,19 +265,25 @@ int main(void) {
 		Log(LOGLEVEL_ERROR, "[E] Could not read launcher\n");
 	}
   
+	// Hoisted outside the if-block so the re-encryption step after patching
+	// can reuse the same key, offsets and lengths.
+	bool doReencrypt = false ;
+	u8 modcryptKey[16] = {0} ;
+	uint32_t modcryptOffsets[2] = {0, 0} ;
+	uint32_t modcryptLengths[2] = {0, 0} ;
+
 	if (target[0x01C] & 2)
 	{
-    CreateProgress("Processing modcrypt #1") ;
+    CreateProgress("Processing modcrypt") ;
 
-		u8 key[16] = {0} ;
 		u8 keyp[16] = {0} ;
 		if (target[0x01C] & 4)
 		{
 			// Debug Key
-			memcpy(key, target, 16) ;
+			memcpy(modcryptKey, target, 16) ;
 		} else
 		{
-			//Retail key
+			// Retail key: derived from the shared Nintendo key + game-specific bytes
 			char modcrypt_shared_key[8] = {'N','i','n','t','e','n','d','o'};
 			memcpy(keyp, modcrypt_shared_key, 8) ;
 			for (int i=0;i<4;i++)
@@ -235,44 +291,31 @@ int main(void) {
 				keyp[8+i] = target[0x0c+i] ;
 				keyp[15-i] = target[0x0c+i] ;
 			}
-			memcpy(key, target+0x350, 16) ;
-			
-			u128_xor(key, keyp);
-			u128_add(key, DSi_KEY_MAGIC);
-      u128_lrot(key, 42) ;
+			memcpy(modcryptKey, target+0x350, 16) ;
+
+			u128_xor(modcryptKey, keyp);
+			u128_add(modcryptKey, DSi_KEY_MAGIC);
+			u128_lrot(modcryptKey, 42) ;
 		}
-		uint32_t modcryptOffsets[2], modcryptLengths[2] ;
+
+		// Read section offsets and lengths from the NDS header at 0x220.
+		// These are kept intact (not zeroed) so the binary stays valid for Unlaunch.
 		modcryptOffsets[0] = ((uint32_t *)(target+0x220))[0] ;
 		modcryptOffsets[1] = ((uint32_t *)(target+0x220))[2] ;
 		modcryptLengths[0] = ((uint32_t *)(target+0x220))[1] ;
 		modcryptLengths[1] = ((uint32_t *)(target+0x220))[3] ;
 
-		uint32_t rk[4];
-		memcpy(rk, key, 16) ;
-		
-		dsi_context ctx;
-		dsi_set_key(&ctx, key);
-		dsi_set_ctr(&ctx, &target[0x300]);
-		if (modcryptLengths[0])
-		{
-			decrypt_modcrypt_area(&ctx, target+modcryptOffsets[0], modcryptLengths[0], &UpdateProgress);
-		}
-    ClearProgress() ;
+    // Decrypt both sections into plaintext so the pattern patches can find
+    // and modify the getter functions inside them.
+    apply_modcrypt(target, modcryptKey, modcryptOffsets, modcryptLengths,
+                   "Decrypting modcrypt #1", "Decrypting modcrypt #2") ;
 
-    CreateProgress("Processing modcrypt #2") ;
-		dsi_set_key(&ctx, key);
-		dsi_set_ctr(&ctx, &target[0x314]);
-		if (modcryptLengths[1])
-		{
-			decrypt_modcrypt_area(&ctx, target+modcryptOffsets[1], modcryptLengths[1], &UpdateProgress);
-		}
-
-		for (int i=0;i<4;i++)
-		{
-			((uint32_t *)(target+0x220))[i] = 0;
-		}
-    
-    ClearProgress() ;
+    // Signal that re-encryption is needed after patching.
+    // Previously this block zeroed the descriptor at 0x220 and left the
+    // modcrypt flag at 0x01C set, along with those sections unencrypted.
+	// These additional changes, caused Unlaunch to attempt decryption on plaintext,
+	// produce garbage, and enter an error loop.
+    doReencrypt = true ;
 	}
 
   SPATCHRESULT patchResults[] =
@@ -315,6 +358,18 @@ int main(void) {
                                 patchList, patchResults, patchCount, 
                                 options) ;              
   
+  // Re-encrypt the patched plaintext back into valid modcrypt sections.
+  // AES-CTR is its own inverse, so apply_modcrypt() with the same key and
+  // CTR values re-encrypts exactly as it decrypted. After this the binary
+  // looks like a normal launcher — valid encrypted sections, intact descriptor,
+  // intact flag — and Unlaunch can decrypt and patch it without hitting an
+  // error loop.
+  if (doReencrypt)
+  {
+    apply_modcrypt(target, modcryptKey, modcryptOffsets, modcryptLengths,
+                   "Re-encrypting modcrypt #1", "Re-encrypting modcrypt #2") ;
+  }
+
 	WaitForPowercord() ;
 	
   if (!WaitForKonami("Write to internal NAND\n"
@@ -337,10 +392,11 @@ int main(void) {
     Log(LOGLEVEL_ERROR, "[E] Write file failed\n    You can turn off now\n") ;
   }
 
-  Log(LOGLEVEL_PROGRESS, "[-] Unmounting\n") ;
-  fatUnmount("nand:") ;
-  Log(LOGLEVEL_PROGRESS, "[-] Merging stages\n");
-  nandio_shutdown() ;			
+  // BlocksDS: no explicit unmount step needed.  The fclose() inside
+  // system_writeFile() already flushed the file and caused FatFs to update
+  // all FAT copies.  The old nandio_shutdown() (custom-driver FAT-stage merge)
+  // must NOT be called here because nandio_startup() was never invoked —
+  // nandInit() uses BlocksDS's built-in NAND driver, not our custom io_dsi_nand.
   
   WaitForSuccessRestart() ;
   while(true) 

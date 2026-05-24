@@ -117,15 +117,15 @@ int main() {
 			u8 base[16]={0};
 			u8 in[16]={0};
 			u8 iv[16]={0};
-			u8 *scratch=(u8*)0x02300200; 
+			u8 *scratch=(u8*)0x02300200;
 			u8 *key3=(u8*)0x40044D0;
-			
-			
+
+
 			aes(in, base, iv, 2);
 
 			//write consecutive 0-255 values to any byte in key3 until we get the same aes output as "base" above - this reveals the hidden byte. this way we can uncover all 16 bytes of the key3 normalkey pretty easily.
 			//greets to Martin Korth for this trick https://problemkaputt.de/gbatek.htm#dsiaesioports (Reading Write-Only Values)
-			for(int i=0;i<16;i++){  
+			for(int i=0;i<16;i++){
 				for(int j=0;j<256;j++){
 					*(key3+i)=j & 0xFF;
 					aes(in, scratch, iv, 2);
@@ -137,11 +137,12 @@ int main() {
 				}
 			}
 		}
-		
-		my_sdmmc_nand_startup() ;
-		my_sdmmc_get_cid(true, (u32*)0x2FFD7BC);	// Get eMMC CID
-		//sdmmc_nand_cid((u32*)0x2FFD7BC);
-	}	
+		// NOTE: do NOT call my_sdmmc_nand_startup() here.
+		// BlocksDS initialises the eMMC/SD hardware inside installSystemFIFO()
+		// (via its own sdmmc driver).  Calling our custom driver first corrupts
+		// the hardware state and causes fatInitDefault() on the ARM9 to hang
+		// waiting for a response that never arrives.
+	}
 	
 	
 
@@ -153,6 +154,14 @@ int main() {
 	installSoundFIFO();
 
 	installSystemFIFO();
+
+	// installSystemFIFO() has initialised BlocksDS's SDMMC driver.
+	// Now read the eMMC CID into the address the ARM9 expects for display.
+	if (isDSiMode())
+	{
+		SDMMC_init(SDMMC_DEV_eMMC);
+		SDMMC_getCidRaw(SDMMC_DEV_eMMC, (u32*)0x2FFD7BC);
+	}
 
 	irqSet(IRQ_VCOUNT, VcountHandler);
 	irqSet(IRQ_VBLANK, VblankHandler);

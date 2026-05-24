@@ -83,7 +83,7 @@ bool nandio_startup()
   {
 		consoleIDfixed[i] = consoleID[7-i];
 	}
-	// iprintf("sector 0 is %s\n", is3DS ? "3DS" : "DSi");
+	// printf("sector 0 is %s\n", is3DS ? "3DS" : "DSi");
 	dsi_crypt_init((const u8*)consoleIDfixed, (const u8*)0x2FFD7BC, is3DS);
 	dsi_nand_crypt(sector_buf, sector_buf, 0, SECTOR_SIZE / AES_BLOCK_SIZE);
 
@@ -131,7 +131,7 @@ static bool read_sectors(sec_t start, sec_t len, void *buffer)
 // len is guaranteed <= CRYPT_BUF_LEN
 static bool write_sectors(sec_t start, sec_t len, const void *buffer) 
 {
-  static u8 writeCopy[SECTOR_SIZE*16] ;
+  static u8 writeCopy[SECTOR_SIZE*CRYPT_BUF_LEN] ;
 	memcpy(writeCopy, buffer, len * SECTOR_SIZE) ;
     
   dsi_nand_crypt(crypt_buf, writeCopy, start * SECTOR_SIZE / AES_BLOCK_SIZE, len * SECTOR_SIZE / AES_BLOCK_SIZE);
@@ -204,9 +204,9 @@ bool nandio_shutdown()
 	u8 reservedSectors = sector_buf[0x0E] ;
   u16 sectorsPerFatCopy = sector_buf[0x16] | ((u16)sector_buf[0x17] << 8) ;
 /*
-	iprintf("[i] Staging for %i FAT copies\n",stagingLevels);
-	iprintf("[i] Stages starting at %i\n",reservedSectors);
-	iprintf("[i] %i sectors per stage\n",sectorsPerFatCopy);
+	printf("[i] Staging for %i FAT copies\n",stagingLevels);
+	printf("[i] Stages starting at %i\n",reservedSectors);
+	printf("[i] %i sectors per stage\n",sectorsPerFatCopy);
 */
 	if (stagingLevels > 1)
 	{
